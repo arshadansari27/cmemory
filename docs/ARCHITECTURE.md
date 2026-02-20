@@ -2,9 +2,9 @@
 
 ## The Core Idea
 
-cmemory is a **lesson memory system for Claude Code CLI**. It synthesizes lessons from coding sessions, stores them as embeddings, and **automatically surfaces relevant lessons** through two channels: top lessons baked into `CLAUDE.md` (read on every session start), and contextual lessons injected mid-session via hooks.
+cmemory is a **lesson memory system for Claude Code CLI**. It synthesizes lessons from coding sessions, builds a living project profile, and **automatically surfaces relevant knowledge** through two channels: the project profile and top lessons baked into `CLAUDE.md` (read on every session start), and contextual lessons injected mid-session via hooks.
 
-The key insight: **Claude will never voluntarily call a "lessons" MCP tool.** It doesn't know what it doesn't know. So instead of asking Claude to search for lessons, we surface them automatically — the most important ones via `CLAUDE.md`, and contextually relevant ones via hook injection.
+The key insight: **Claude will never voluntarily call a "lessons" MCP tool.** It doesn't know what it doesn't know. So instead of asking Claude to search for lessons, we surface them automatically — the project profile and most important lessons via `CLAUDE.md`, and contextually relevant lessons via hook injection.
 
 ---
 
@@ -14,7 +14,7 @@ The key insight: **Claude will never voluntarily call a "lessons" MCP tool.** It
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Claude Code CLI                           │
 │                                                                  │
-│  Session Start → reads CLAUDE.md (top 10 lessons)          │
+│  Session Start → reads CLAUDE.md (project profile + top 10 lessons) │
 │                                                                  │
 │  User: "login is broken"                                         │
 │           │                                                      │
@@ -32,11 +32,11 @@ The key insight: **Claude will never voluntarily call a "lessons" MCP tool.** It
 │                     cmemory Hook Scripts                          │
 │                                                                   │
 │  1. Embed full prompt / tool context as single semantic query       │
-│  2. Local embeddings (transformers.js, bge-small-en-v1.5)          │
+│  2. Local embeddings (transformers.js, nomic-embed-text-v1.5)          │
 │  3. Brute-force cosine similarity against lesson embeddings        │
 │  4. Return top lessons above threshold as context                  │
 │                                                                   │
-│  Persistent: Top 10 lessons written to CLAUDE.md             │
+│  Persistent: Project profile + top 10 lessons in CLAUDE.md         │
 │  Storage: JSON files in .claude/cmemory/ (project-scoped)          │
 │  Synthesis: Queue on Stop → single `claude -p` on SessionEnd       │
 └───────────────────────────────────────────────────────────────────┘
@@ -104,15 +104,28 @@ const query = `searching for ${toolInput.pattern} in ${toolInput.path || 'codeba
 
 **Which tools to fire on:** `Read`, `Bash`, `Grep` — these are the exploration tools. Skip `Write`, `Edit`, `Glob`, `LS` (low signal).
 
-### 3. `CLAUDE.md` — Top lessons always visible
+### 3. `CLAUDE.md` — Project profile and top lessons always visible
 
-Instead of a SessionStart hook, cmemory writes top lessons directly into `CLAUDE.md`. Claude already reads this file on every session start — zero new infrastructure.
+Instead of a SessionStart hook, cmemory writes two managed sections directly into `CLAUDE.md`. Claude already reads this file on every session start — zero new infrastructure.
 
-cmemory uses comment markers to own a section without touching the user's content. Lessons are project knowledge — they belong in version control so the whole team benefits. The markers make the section easy to resolve if merge conflicts occur.
-
-cmemory uses comment markers to own a section without touching anything else:
+cmemory uses comment markers to own its sections without touching the user's content. This is project knowledge — it belongs in version control so the whole team benefits. The markers make each section easy to resolve if merge conflicts occur.
 
 ```markdown
+<!-- cmemory:profile-start -->
+## Project Profile (auto-managed by cmemory)
+
+**Stack:** Next.js 14 (App Router), TypeScript, Prisma with PostgreSQL, NextAuth.js with Google OAuth + magic links. Deployed on Vercel with Edge middleware for auth checks.
+
+**Architecture:** Monorepo. API routes in app/api/, shared types in packages/types/, UI components in packages/ui/. Server components by default, client components only in app/_components/.
+
+**Data:** Prisma schema in prisma/schema.prisma. Multi-tenant — every table has orgId. Row-level security enforced in middleware, not at the DB level.
+
+**Auth:** NextAuth.js session strategy with JWT. Refresh tokens stored in httpOnly cookies. The middleware in middleware.ts checks auth on every route except /public/*.
+
+**Audience:** B2B SaaS for logistics companies. Users are warehouse managers, not developers. UI must be simple.
+
+<!-- cmemory:profile-end -->
+
 <!-- cmemory:lessons-start -->
 ## Project Lessons (auto-managed by cmemory)
 
@@ -123,9 +136,13 @@ cmemory uses comment markers to own a section without touching anything else:
 <!-- cmemory:lessons-end -->
 ```
 
-**How it gets updated:** After synthesis completes (`on-session-end.js`), cmemory rewrites the section with the current top 10 lessons sorted by recency. The markers let it find and replace its own block without touching anything the user has written above or below.
+**The project profile** is a short living document — concise prose, not structured data — that gives Claude an immediate understanding of what this project IS: the stack, architecture, data model, auth approach, deployment, audience. It starts empty on a new project and grows automatically as Sonnet observes sessions. By the third or fourth session, Claude has a solid overview without needing to explore.
 
-**This eliminates the SessionStart hook entirely.** No model loading on startup, no embedding queries, no blocking. Lessons are just text in a file Claude already reads.
+**The lessons section** contains the top 10 specific, actionable gotchas and patterns sorted by recency.
+
+**How they get updated:** After synthesis completes (`on-session-end`), cmemory rewrites both sections. Profile updates are incremental — Sonnet patches what changed, not rewrites from scratch. Lessons are replaced with the current top 10.
+
+**This eliminates the SessionStart hook entirely.** No model loading on startup, no embedding queries, no blocking. Everything Claude needs is text in a file it already reads.
 
 ---
 
@@ -140,8 +157,9 @@ my-project/
 │   ├── settings.local.json    # Local overrides (already exists)
 │   └── cmemory/
 │       ├── lessons.json       # All lessons + embeddings for THIS project
+│       ├── profile.md         # Full project profile text (source of truth)
 │       └── meta.json          # Project name, last sync, stats
-├── CLAUDE.md                  # Project instructions + cmemory's managed lesson section
+├── CLAUDE.md                  # Project instructions + cmemory's profile and lesson sections
 ├── src/
 └── ...
 ```
@@ -199,7 +217,7 @@ interface Lesson {
   id: string;                    // uuid
   content: string;               // The lesson text (1-3 sentences)
   tags: string[];                // File paths, function names, concepts
-  embedding: number[];           // 384-dim float array (bge-small-en-v1.5)
+  embedding: number[];           // 768-dim float array (nomic-embed-text-v1.5)
   createdAt: string;             // ISO timestamp
   updatedAt: string;             // ISO timestamp — set when Sonnet updates/re-confirms
   source: {
@@ -209,7 +227,7 @@ interface Lesson {
 }
 ```
 
-**Why no confidence score or hit count?** Lessons don't score themselves — Sonnet curates them. Every lesson in the store is treated as equally valid because it was either freshly synthesized or explicitly kept alive by Sonnet during dedup. Stale lessons get replaced or removed during synthesis, not decayed by a timer. See "Lesson Synthesis — Sonnet as Curator" below.
+**Why no confidence score or hit count?** Lessons don't score themselves — Sonnet curates them. Every lesson in the store is treated as equally valid because it was either freshly synthesized or explicitly kept alive by Sonnet during dedup. Stale lessons get replaced or removed during synthesis, not decayed by a timer. See "Synthesis — Sonnet as Curator" below.
 
 ### Vector Search — Brute Force
 
@@ -234,13 +252,13 @@ function searchLessons(queryEmbedding: number[], lessons: Lesson[], threshold = 
 }
 ```
 
-At 1000 lessons with 384-dim vectors, this runs in **< 5ms**. No index needed.
+At 1000 lessons with 768-dim vectors, this runs in **< 5ms**. No index needed.
 
 ### Query Strategy — Why Single Queries, Not Decomposition
 
 **Core principle: Embed the full semantic context as one query. Never decompose into keywords or file names.**
 
-Vector embeddings capture *meaning*, not keywords. When you embed "login is broken", the resulting 384-dimensional vector sits near other vectors about authentication failures, session expiry, token refresh bugs — even if they share zero words. That's the whole point of semantic search.
+Vector embeddings capture *meaning*, not keywords. When you embed "login is broken", the resulting 768-dimensional vector sits near other vectors about authentication failures, session expiry, token refresh bugs — even if they share zero words. That's the whole point of semantic search.
 
 Decomposing a prompt into file names and function names creates problems:
 - **False positives:** Querying "auth.ts" alone matches every lesson mentioning that file, regardless of whether it's about login, logout, permissions, or something unrelated
@@ -265,20 +283,20 @@ let extractor: any = null;
 
 async function getEmbedding(text: string): Promise<number[]> {
   if (!extractor) {
-    extractor = await pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5');
+    extractor = await pipeline('feature-extraction', 'nomic-ai/nomic-embed-text-v1.5');
   }
   const result = await extractor(text, { pooling: 'mean', normalize: true });
   return Array.from(result.data);
 }
 ```
 
-**Model choice:** `bge-small-en-v1.5` — 384 dimensions, ~30MB, handles up to 256 tokens well. Perfect for lesson-length text (1-3 sentences).
+**Model choice:** `nomic-embed-text-v1.5` — 768 dimensions (or 384 truncated via Matryoshka), ~270MB, proven fast in CMEM. Higher retrieval quality than bge-small.
 
 
 
 ---
 
-## Lesson Synthesis — Sonnet as Curator
+## Synthesis — Sonnet as Curator (Profile + Lessons in One Call)
 
 ### No API Key Required
 
@@ -297,15 +315,16 @@ Instead:
 ```
 .claude/cmemory/
 ├── lessons.json       # All lessons + embeddings
+├── profile.md         # Project profile text (source of truth for CLAUDE.md section)
 ├── meta.json          # Project metadata
 └── pending.json       # Queue of transcript paths awaiting synthesis
 ```
 
 ### The Single-Pass Synthesis Call
 
-We collapse extraction + curation into ONE `claude -p` call. Sonnet gets both the transcript AND the existing lessons simultaneously, so it can make better decisions about what's new vs what's a duplicate vs what contradicts existing knowledge. One CLI boot, one call, done.
+We handle both profile updates and lesson curation in ONE `claude -p` call. Sonnet gets the transcript, the current project profile, AND the existing lessons simultaneously. One CLI boot, one call, two outputs.
 
-**Critical: No tool access.** This call must be pure text-in, JSON-out. Sonnet reads the transcript (already piped in as text) and the existing lessons (also text). It does NOT explore the codebase, read files, run commands, or spawn subagents. The transcript already contains everything it needs — the files Claude read, the errors it hit, the fixes it applied. Granting tools would waste tokens, slow synthesis, and risk unintended side effects.
+**Critical: No tool access.** This call must be pure text-in, JSON-out. Sonnet reads the transcript (already piped in as text), the existing project profile, and the existing lessons. It does NOT explore the codebase, read files, run commands, or spawn subagents. The transcript already contains everything it needs — the files Claude read, the errors it hit, the fixes it applied. Granting tools would waste tokens, slow synthesis, and risk unintended side effects.
 
 We enforce this with:
 - `--max-turns 1` — One response, no agentic loop
@@ -317,26 +336,40 @@ cat <<EOF | claude -p \
   --model sonnet \
   --max-turns 1 \
   --output-format json \
-  --system-prompt "You are a lessons database curator for a software project. Respond ONLY with JSON. Do not use any tools."
+  --system-prompt "You are a project knowledge curator for a software project. Respond ONLY with JSON. Do not use any tools."
   
-You have two inputs:
+You have three inputs:
 
 1. A Claude Code session transcript from a development session
-2. The current set of existing lessons stored for this project
+2. The current project profile (may be empty for new projects)
+3. The current set of existing lessons stored for this project
 
-Your job:
+You have two jobs:
+
+JOB 1 — UPDATE THE PROJECT PROFILE
+The project profile is a short, concise overview of what this project IS. It should cover any of the following that are known: tech stack, architecture, data model, auth approach, deployment, target audience, key conventions, and strict requirements.
+- If the transcript reveals new information about the project (e.g., a new integration was added, the auth strategy changed, the deployment target was updated), update the profile to reflect it.
+- Keep it concise — a few short paragraphs, not a novel. Use bold labels for sections.
+- If nothing in the transcript reveals new project-level information, return null for the profile.
+- The profile should read as a briefing document for a developer joining the project for the first time.
+
+JOB 2 — CURATE LESSONS
 - Extract any new, specific, actionable lessons from the transcript
 - Compare each candidate against existing lessons
 - For each candidate, decide: "new", "duplicate", "update", or "contradiction"
 
-RULES:
+LESSON RULES:
 - A "lesson" is a specific, actionable insight (1-3 sentences) that would help future development on this codebase
 - DO extract: bugs and root causes, non-obvious API behavior, file-specific gotchas, config issues, component dependencies
 - DO NOT extract: generic advice ("always handle errors"), obvious facts ("React uses JSX"), or one-off fixes that won't recur
+- DO NOT extract things that belong in the profile (stack choices, architecture decisions, deployment setup)
 - "duplicate" = an existing lesson already says the same thing, even if worded differently → discard candidate
 - "update" = candidate has newer/corrected info about the same topic → replace existing with candidate
 - "contradiction" = existing lesson is now stale/wrong based on this session → replace existing with candidate
 - "new" = no existing lesson covers this topic → add candidate
+
+CURRENT PROJECT PROFILE:
+${currentProfileOrEmpty}
 
 EXISTING LESSONS:
 ${existingLessonsJson}
@@ -346,6 +379,7 @@ ${transcriptContent}
 
 Respond with ONLY this JSON structure:
 {
+  "profile": "updated profile text as markdown (or null if unchanged)",
   "actions": [
     {
       "action": "add",
@@ -368,12 +402,14 @@ EOF
 
 ### What This Guarantees
 
+- **Project understanding from session one** — The profile builds automatically. By a few sessions in, Claude starts every conversation knowing the stack, architecture, data model, auth, and audience.
 - **No duplicates** — Sonnet catches rephrased versions of existing lessons
 - **No contradictions** — Stale lessons get replaced, not accumulated alongside correct ones
 - **No scoring needed** — Every lesson in the store is valid. If it wasn't, Sonnet would have replaced or discarded it. No confidence scores, no decay, no hit counting.
+- **Profile stays current** — When the project evolves (new integration, auth migration, deployment change), Sonnet patches the profile in the same synthesis call.
 - **No API key** — Uses `claude -p` with existing CLI auth, counts toward normal plan usage
 - **No process pileup** — Queue model means one synthesis process per session, triggered at `SessionEnd`
-- **Cost** — One Sonnet call per session (only sessions above complexity threshold), background/async
+- **Cost** — One Sonnet call per session (only sessions above complexity threshold), background/async. Profile + lessons in one call, not two.
 
 ### Synthesis Threshold
 
@@ -398,7 +434,7 @@ Long sessions produce large transcripts that may exceed Sonnet's context window.
 
 1. Truncate to the most recent N tool calls (the end of a session is usually where the resolution/fix lives)
 2. Or split into chunks and synthesize each chunk separately (still one `claude -p` call per chunk)
-3. Include existing lessons in full every time — they're small (just text + tags, no embeddings)
+3. Include existing lessons and project profile in full every time — they're small (lessons are just text + tags, profile is a few paragraphs, no embeddings in either)
 
 ---
 
@@ -488,11 +524,14 @@ Long sessions produce large transcripts that may exceed Sonnet's context window.
 3. Spawn a detached background process that:
    - Reads all queued transcript paths
    - Loads existing lessons (content + tags only, no embeddings — keeps the prompt small)
+   - Loads existing project profile from `.claude/cmemory/profile.md` (or empty string for new projects)
    - Runs ONE `claude -p --model sonnet --max-turns 1` call — no `--allowedTools`, so Sonnet has zero tool access. Pure text-in, JSON-out.
-   - Parses the JSON response: apply `add`, `replace`, `discard` actions
+   - Parses the JSON response:
+     - If `profile` is non-null, writes updated text to `.claude/cmemory/profile.md`
+     - Applies lesson `add`, `replace`, `discard` actions
    - Embeds any new/updated lessons locally via transformers.js
    - Writes updated `lessons.json`
-   - **Rewrites the `<!-- cmemory:lessons-start -->` section in `CLAUDE.md`** with the current top 10 lessons (sorted by recency). Creates the file if it doesn't exist.
+   - **Rewrites both managed sections in `CLAUDE.md`** — profile from `profile.md`, top 10 lessons from `lessons.json`
    - Clears `pending.json`
 4. Exit immediately (the background process runs after the session is gone)
 
@@ -532,11 +571,11 @@ cmemory status                  # Show stats, hook health, lesson count
 |-----------|--------|-----|
 | Language | TypeScript/Node.js | Same ecosystem as Claude Code, CodeGraph |
 | Embeddings | `@huggingface/transformers` | Pure WASM, no native builds, runs everywhere |
-| Model | `Xenova/bge-small-en-v1.5` | 384-dim, ~30MB, fast, good for short text |
+| Model | `nomic-ai/nomic-embed-text-v1.5` | 768-dim, ~270MB, higher quality retrieval, proven in CMEM |
 | Storage | JSON files in `.claude/cmemory/` | Project-scoped, no DB needed at lesson scale, zero deps |
 | Synthesis LLM | Sonnet via `claude -p` | Uses existing CLI auth, no API key needed, counts toward plan |
 | Hooks | Claude Code native hooks | `UserPromptSubmit`, `PostToolUse`, `Stop`, `SessionEnd` |
-| Persistent lessons | `CLAUDE.md` | Top 10 lessons, zero runtime cost, Claude reads it natively |
+| Persistent knowledge | `CLAUDE.md` | Project profile + top 10 lessons, zero runtime cost, Claude reads it natively |
 | Package | npm (global install) | Same distribution as CodeGraph |
 
 ---
@@ -544,8 +583,9 @@ cmemory status                  # Show stats, hook health, lesson count
 ## What Makes This Different from the original CMEM
 
 1. **No MCP tool dependency** — Claude never needs to decide to call a tool
-2. **CLAUDE.md** — Top lessons written directly into the file Claude already reads on every session, zero runtime cost
-3. **Contextual injection** — Hook-based mid-session injection surfaces lessons relevant to what Claude is actively doing
+2. **Living project profile** — Sonnet builds and maintains a concise overview of the project's stack, architecture, data model, auth, and audience. Claude knows what the project IS from the first prompt.
+3. **CLAUDE.md** — Profile and top lessons written directly into the file Claude already reads on every session, zero runtime cost
+4. **Contextual injection** — Hook-based mid-session injection surfaces lessons relevant to what Claude is actively doing
 4. **Official hook API** — Uses `additionalContext` and stdout injection, not hacks
 5. **Zero native builds** — WASM embeddings, JSON storage, works on Windows
 6. **Project-scoped** — Lessons live in `.claude/cmemory/`, travel with the project, no global config

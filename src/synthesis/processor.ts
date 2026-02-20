@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { Lesson, SynthesisAction, SynthesisResponse } from '../core/types';
 import { loadLessons, saveLessons, loadMeta, saveMeta, clearPending, saveProfile } from '../core/storage';
-import { getEmbedding } from '../core/embeddings';
+import { getDocumentEmbedding } from '../core/embeddings';
 import { updateClaudeMd } from './claude-md';
 import { debug, info, warn } from '../utils/logger';
 
@@ -20,7 +20,7 @@ export async function processSynthesisResponse(
       case 'add': {
         const now = new Date().toISOString();
         info(`Adding lesson: ${action.content.substring(0, 80)}...`);
-        const embedding = await getEmbedding(action.content);
+        const embedding = await getDocumentEmbedding(action.content);
         const lesson: Lesson = {
           id: crypto.randomUUID(),
           content: action.content,
@@ -40,7 +40,7 @@ export async function processSynthesisResponse(
         if (idx === -1) {
           warn(`Replace target not found: ${action.targetId}, adding as new lesson instead`);
           const now = new Date().toISOString();
-          const embedding = await getEmbedding(action.content);
+          const embedding = await getDocumentEmbedding(action.content);
           lessons.push({
             id: crypto.randomUUID(),
             content: action.content,
@@ -52,7 +52,7 @@ export async function processSynthesisResponse(
           });
         } else {
           info(`Replacing lesson ${action.targetId}: ${action.content.substring(0, 80)}...`);
-          const embedding = await getEmbedding(action.content);
+          const embedding = await getDocumentEmbedding(action.content);
           lessons[idx] = {
             ...lessons[idx],
             content: action.content,

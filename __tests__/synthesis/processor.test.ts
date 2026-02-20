@@ -7,7 +7,7 @@ import { Lesson, SynthesisResponse } from '../../src/core/types';
 
 // Mock embeddings to avoid loading the model in tests
 vi.mock('../../src/core/embeddings', () => ({
-  getEmbedding: vi.fn().mockResolvedValue(new Array(384).fill(0.01)),
+  getDocumentEmbedding: vi.fn().mockResolvedValue(new Array(768).fill(0.01)),
   ensureModelDownloaded: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -47,7 +47,7 @@ describe('processSynthesisResponse', () => {
       id: 'lesson-to-replace',
       content: 'Old content',
       tags: ['old'],
-      embedding: new Array(384).fill(0),
+      embedding: new Array(768).fill(0),
       createdAt: '2025-01-01T00:00:00Z',
       updatedAt: '2025-01-01T00:00:00Z',
       source: 'manual',

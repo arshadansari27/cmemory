@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import { modelCacheDir } from '../utils/paths';
 import { debug, error as logError } from '../utils/logger';
 
-const MODEL_NAME = 'Xenova/bge-small-en-v1.5';
+const MODEL_NAME = 'nomic-ai/nomic-embed-text-v1.5';
 
 let pipelineInstance: any = null;
 
@@ -35,12 +35,28 @@ async function getPipeline(): Promise<any> {
 
 /**
  * Generate a normalized embedding vector for the given text.
- * Returns a 384-dimensional float array.
+ * Returns a 768-dimensional float array.
  */
-export async function getEmbedding(text: string): Promise<number[]> {
+async function getEmbedding(text: string): Promise<number[]> {
   const pipe = await getPipeline();
-  const output = await pipe(text, { pooling: 'cls', normalize: true });
+  const output = await pipe(text, { pooling: 'mean', normalize: true });
   return Array.from(output.data as Float32Array);
+}
+
+/**
+ * Generate an embedding for a search query.
+ * Prepends the "search_query: " prefix required by nomic for asymmetric search.
+ */
+export async function getQueryEmbedding(text: string): Promise<number[]> {
+  return getEmbedding(`search_query: ${text}`);
+}
+
+/**
+ * Generate an embedding for a document to be stored.
+ * Prepends the "search_document: " prefix required by nomic for asymmetric search.
+ */
+export async function getDocumentEmbedding(text: string): Promise<number[]> {
+  return getEmbedding(`search_document: ${text}`);
 }
 
 /**

@@ -1,7 +1,7 @@
 import { readStdin, runHook, getProjectRoot } from './shared';
 import { PostToolUseInput, SearchResult } from '../core/types';
 import { loadLessons } from '../core/storage';
-import { getEmbedding } from '../core/embeddings';
+import { getQueryEmbedding } from '../core/embeddings';
 import { searchLessons } from '../core/search';
 import { debug } from '../utils/logger';
 
@@ -33,8 +33,8 @@ export async function onToolUse(): Promise<void> {
     const query = buildQuery(input);
     debug(`PostToolUse query: ${query}`);
 
-    const queryEmbedding = await getEmbedding(query);
-    const results = searchLessons(queryEmbedding, lessons, 0.70, 3);
+    const queryEmbedding = await getQueryEmbedding(query);
+    const results = searchLessons(queryEmbedding, lessons, 0.55, 3);
 
     if (results.length === 0) return;
 

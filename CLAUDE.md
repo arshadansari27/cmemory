@@ -3,7 +3,7 @@
 
 **cmemory** — A TypeScript CLI tool that gives Claude Code persistent memory across sessions via hooks and vector search.
 
-**Stack:** TypeScript + Node.js, compiled with `tsc`, tested with vitest. Uses `@xenova/transformers` (Xenova/bge-small-en-v1.5, 384-dim) for local embeddings. Distributed as a global npm package (`npm link`).
+**Stack:** TypeScript + Node.js, compiled with `tsc`, tested with vitest. Uses `@huggingface/transformers` (nomic-ai/nomic-embed-text-v1.5, 768-dim) for local embeddings with asymmetric search prefixes (`search_query:` / `search_document:`). Distributed as a global npm package (`npm link`).
 
 **Architecture:** Four Claude Code hooks intercept the session lifecycle — `UserPromptSubmit` searches lessons and injects them via stdout, `PostToolUse` (Read/Bash/Grep) injects tool-relevant lessons, `Stop` queues transcripts with >5 tool calls to `pending.json`, `SessionEnd` spawns `cmemory sync` in the background. A synthesis pipeline runs `claude -p --model sonnet` to extract lessons from queued transcripts and writes them to `lessons.json`.
 

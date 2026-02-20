@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { initCmemory, isCmemoryInitialized, loadLessons, saveLessons, loadMeta, loadProfile, saveProfile } from '../core/storage';
-import { getEmbedding, ensureModelDownloaded } from '../core/embeddings';
+import { getQueryEmbedding, getDocumentEmbedding, ensureModelDownloaded } from '../core/embeddings';
 import { searchLessons } from '../core/search';
 import { info, error as logError } from '../utils/logger';
 import { findProjectRoot } from '../utils/paths';
@@ -143,7 +143,7 @@ program
     const now = new Date().toISOString();
 
     console.log('Generating embedding...');
-    const embedding = await getEmbedding(text);
+    const embedding = await getDocumentEmbedding(text);
 
     const lesson = {
       id: crypto.randomUUID(),
@@ -229,7 +229,7 @@ program
 
     if (opts.search) {
       console.log(`Searching for: "${opts.search}"\n`);
-      const queryEmbedding = await getEmbedding(opts.search);
+      const queryEmbedding = await getQueryEmbedding(opts.search);
       const results = searchLessons(queryEmbedding, lessons, 0.0, 10);
 
       if (results.length === 0) {

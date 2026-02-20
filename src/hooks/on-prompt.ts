@@ -1,7 +1,7 @@
 import { readStdin, runHook, getProjectRoot } from './shared';
 import { UserPromptSubmitInput, SearchResult } from '../core/types';
 import { loadLessons } from '../core/storage';
-import { getEmbedding } from '../core/embeddings';
+import { getQueryEmbedding } from '../core/embeddings';
 import { searchLessons } from '../core/search';
 import { resolveExternalPaths, findProjectRootForPath } from '../utils/paths';
 import { debug } from '../utils/logger';
@@ -39,8 +39,8 @@ export async function onPrompt(): Promise<void> {
     }
 
     // Embed the full prompt as a single semantic query
-    const queryEmbedding = await getEmbedding(prompt);
-    const results = searchLessons(queryEmbedding, lessons, 0.70, 5);
+    const queryEmbedding = await getQueryEmbedding(prompt);
+    const results = searchLessons(queryEmbedding, lessons, 0.55, 5);
 
     // Cross-project: scan prompt for external file paths
     const externalPaths = resolveExternalPaths(prompt);
@@ -52,7 +52,7 @@ export async function onPrompt(): Promise<void> {
         seenRoots.add(extRoot);
         const extLessons = loadLessons(extRoot);
         if (extLessons.length > 0) {
-          const extResults = searchLessons(queryEmbedding, extLessons, 0.70, 3);
+          const extResults = searchLessons(queryEmbedding, extLessons, 0.55, 3);
           results.push(...extResults);
         }
       }
