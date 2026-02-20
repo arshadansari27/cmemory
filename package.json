@@ -11,6 +11,7 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:mcp": "vitest run __tests__/mcp/handlers.test.ts",
     "test:integration": "vitest run --config vitest.config.integration.ts"
   },
   "dependencies": {

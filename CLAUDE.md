@@ -1,14 +1,15 @@
 <!-- cmemory:tools-start -->
-## cmemory Tools (auto-managed by cmemory)
+## cmemory — Persistent Project Memory
 
-You have these MCP tools for persistent project memory:
+You have MCP tools that persist knowledge across sessions. Use them:
 
-- **search_lessons** — Search past lessons by semantic similarity. Use at the start of tasks.
-- **save_lesson** — Save a new lesson. Auto-checks for duplicates; use replace_id to update or force: true to skip.
-- **reject_lesson** — Remove a wrong or stale lesson by ID (prefix match supported).
-- **update_profile** — Replace the project profile (stack, architecture, conventions).
+**search_lessons** — Call this FIRST when starting any task, debugging any bug, or touching unfamiliar code. Query with natural language: "auth token refresh", "stripe webhook handling", "database migration order". Past sessions may have already solved what you're about to work on.
 
-**Workflow:** Search before you work. Save when you learn.
+**save_lesson** — Call after: fixing a non-obvious bug, discovering unexpected API behavior, finding a workaround, or learning why something is built a certain way. Good lessons: bug root causes, API gotchas, file-specific patterns. Bad lessons: basic setup steps, obvious errors. Write 1-3 sentences. Tag with file paths and concepts.
+
+**reject_lesson** — Call this when search_lessons returns something wrong or outdated based on what you currently see in the code. Keeping stale lessons hurts future sessions.
+
+**update_profile** — Call this when you learn something structural about the project: the stack, how auth works, how data is stored, deployment setup, target audience. Also call when these change: new integrations, auth migrations, database changes, deployment updates. The profile helps future sessions understand this project immediately.
 <!-- cmemory:tools-end -->
 
 <!-- cmemory:profile-start -->
@@ -16,7 +17,7 @@ You have these MCP tools for persistent project memory:
 
 **cmemory** — A TypeScript CLI tool that gives Claude Code persistent memory across sessions via hooks, MCP tools, and vector search.
 
-**Stack:** TypeScript + Node.js, compiled with `tsc`, tested with vitest. Uses `@huggingface/transformers` (nomic-ai/nomic-embed-text-v1.5, 768-dim) for local embeddings with asymmetric search prefixes (`search_query:` / `search_document:`). Distributed as a global npm package (`npm link`).
+**Stack:** TypeScript + Node.js, compiled with `tsc`, tested with vitest. Uses `@huggingface/transformers` (nomic-ai/nomic-embed-text-v1.5, 768-dim) for local embeddings with asymmetric search prefixes (`search_query:` / `search_document:`). Distributed as a global npm package (on Windows, uses a `.cmd` shim in the npm global bin directory instead of symlinks).
 
 **Architecture:** MCP server exposes four tools (search_lessons, save_lesson, reject_lesson, update_profile) as the primary interface. A single `UserPromptSubmit` hook outputs a nudge reminding Claude to use the MCP tools. Hooks registered in `~/.claude/settings.json`, MCP server registered via `claude mcp add`.
 

@@ -7,6 +7,8 @@ import {
   isCmemoryInitialized,
   loadLessons,
   saveLessons,
+  enforceLessonCap,
+  MAX_LESSONS,
 } from '../../src/core/storage';
 import { Lesson } from '../../src/core/types';
 
@@ -69,5 +71,69 @@ describe('lessons', () => {
     // Delete the file
     fs.unlinkSync(path.join(tmpDir, '.claude/cmemory/lessons.json'));
     expect(loadLessons(tmpDir)).toEqual([]);
+  });
+});
+
+function makeLesson(id: string, updatedAt: string): Lesson {
+  return {
+    id,
+    content: `Lesson ${id}`,
+    tags: [],
+    embedding: [1, 0, 0],
+    createdAt: updatedAt,
+    updatedAt,
+    source: 'manual',
+  };
+}
+
+describe('enforceLessonCap', () => {
+  it('returns same array when under cap', () => {
+    const lessons = [makeLesson('a', '2025-01-01T00:00:00Z')];
+    const result = enforceLessonCap(lessons);
+    expect(result).toBe(lessons); // same reference, not a copy
+  });
+
+  it('returns same array when exactly at cap', () => {
+    const lessons = Array.from({ length: MAX_LESSONS }, (_, i) =>
+      makeLesson(`lesson-${i}`, `2025-01-01T00:00:00Z`)
+    );
+    const result = enforceLessonCap(lessons);
+    expect(result).toBe(lessons);
+  });
+
+  it('evicts oldest lessons when over cap', () => {
+    const lessons = Array.from({ length: MAX_LESSONS + 5 }, (_, i) =>
+      makeLesson(`lesson-${i}`, new Date(2025, 0, i + 1).toISOString())
+    );
+    const result = enforceLessonCap(lessons);
+    expect(result).toHaveLength(MAX_LESSONS);
+
+    // The 5 oldest (earliest updatedAt) should be gone
+    const resultIds = result.map(l => l.id);
+    for (let i = 0; i < 5; i++) {
+      expect(resultIds).not.toContain(`lesson-${i}`);
+    }
+    // The newest should still be present
+    expect(resultIds).toContain(`lesson-${MAX_LESSONS + 4}`);
+  });
+
+  it('keeps most recently updated, not most recently created', () => {
+    const old = makeLesson('old-but-updated', '2024-01-01T00:00:00Z');
+    old.updatedAt = '2026-12-31T00:00:00Z'; // updated recently
+
+    const newer = Array.from({ length: MAX_LESSONS }, (_, i) =>
+      makeLesson(`newer-${i}`, new Date(2025, 0, i + 1).toISOString())
+    );
+
+    const lessons = [old, ...newer]; // 101 total
+    const result = enforceLessonCap(lessons);
+    expect(result).toHaveLength(MAX_LESSONS);
+
+    // old-but-updated should survive because its updatedAt is the newest
+    const resultIds = result.map(l => l.id);
+    expect(resultIds).toContain('old-but-updated');
+
+    // The lesson with the earliest updatedAt should be evicted
+    expect(resultIds).not.toContain('newer-0');
   });
 });

@@ -59,7 +59,8 @@
       "Bash(powershell.exe -Command \"Remove-Item ''C:\\\\Users\\\\me\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\cmemory'' -Force\")",
       "Bash(\"/c/Users/me/AppData/Roaming/npm/cmemory.cmd\":*)",
       "Bash(powershell.exe -Command \"cmemory --version\")",
-      "Bash(powershell.exe -Command \"cmemory init\")"
+      "Bash(powershell.exe -Command \"cmemory init\")",
+      "Bash(npm run test:mcp:*)"
     ]
   }
 }

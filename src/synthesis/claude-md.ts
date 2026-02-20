@@ -6,7 +6,7 @@ import { debug } from '../utils/logger';
 
 const TOOLS_MARKER_START = '<!-- cmemory:tools-start -->';
 const TOOLS_MARKER_END = '<!-- cmemory:tools-end -->';
-const TOOLS_HEADER = '## cmemory Tools (auto-managed by cmemory)';
+const TOOLS_HEADER = '## cmemory — Persistent Project Memory';
 
 const PROFILE_MARKER_START = '<!-- cmemory:profile-start -->';
 const PROFILE_MARKER_END = '<!-- cmemory:profile-end -->';
@@ -22,14 +22,15 @@ const LESSON_HEADER = '## Project Lessons (auto-managed by cmemory)';
 function buildToolsSection(): string {
   const body = [
     '',
-    'You have these MCP tools for persistent project memory:',
+    'You have MCP tools that persist knowledge across sessions. Use them:',
     '',
-    '- **search_lessons** — Search past lessons by semantic similarity. Use at the start of tasks.',
-    '- **save_lesson** — Save a new lesson. Auto-checks for duplicates; use replace_id to update or force: true to skip.',
-    '- **reject_lesson** — Remove a wrong or stale lesson by ID (prefix match supported).',
-    '- **update_profile** — Replace the project profile (stack, architecture, conventions).',
+    '**search_lessons** — Call this FIRST when starting any task, debugging any bug, or touching unfamiliar code. Query with natural language: "auth token refresh", "stripe webhook handling", "database migration order". Past sessions may have already solved what you\'re about to work on.',
     '',
-    '**Workflow:** Search before you work. Save when you learn.',
+    '**save_lesson** — Call after: fixing a non-obvious bug, discovering unexpected API behavior, finding a workaround, or learning why something is built a certain way. Good lessons: bug root causes, API gotchas, file-specific patterns. Bad lessons: basic setup steps, obvious errors. Write 1-3 sentences. Tag with file paths and concepts.',
+    '',
+    '**reject_lesson** — Call this when search_lessons returns something wrong or outdated based on what you currently see in the code. Keeping stale lessons hurts future sessions.',
+    '',
+    '**update_profile** — Call this when you learn something structural about the project: the stack, how auth works, how data is stored, deployment setup, target audience. Also call when these change: new integrations, auth migrations, database changes, deployment updates. The profile helps future sessions understand this project immediately.',
   ];
   return [TOOLS_MARKER_START, TOOLS_HEADER, ...body, TOOLS_MARKER_END].join('\n');
 }

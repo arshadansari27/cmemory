@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { execSync } from 'child_process';
-import { initCmemory, isCmemoryInitialized, loadLessons, saveLessons, loadProfile, saveProfile } from '../core/storage';
+import { initCmemory, isCmemoryInitialized, loadLessons, saveLessons, loadProfile, saveProfile, enforceLessonCap } from '../core/storage';
 import { getQueryEmbedding, getDocumentEmbedding, ensureModelDownloaded } from '../core/embeddings';
 import { searchLessons } from '../core/search';
 import { info, error as logError } from '../utils/logger';
@@ -28,6 +28,7 @@ program
     const cwd = process.cwd();
     const alreadyInit = isCmemoryInitialized(cwd);
     initCmemory(cwd);
+    updateClaudeMd(cwd);
     if (alreadyInit) {
       console.log('cmemory is already initialized in this project (checked for missing files).');
       return;
@@ -147,7 +148,8 @@ program
   .command('add <text>')
   .description('Add a lesson manually')
   .option('--tags <tags>', 'Comma-separated tags', '')
-  .action(async (text: string, opts: { tags: string }) => {
+  .option('--force', 'Skip duplicate check')
+  .action(async (text: string, opts: { tags: string; force?: boolean }) => {
     const cwd = process.cwd();
     const projectRoot = findProjectRoot(cwd);
     if (!projectRoot) {
@@ -161,6 +163,21 @@ program
     console.log('Generating embedding...');
     const embedding = await getDocumentEmbedding(text);
 
+    const lessons = loadLessons(projectRoot);
+
+    // Dedup check (unless --force)
+    if (!opts.force) {
+      const results = searchLessons(embedding, lessons, 0.50, 1);
+      if (results.length > 0) {
+        const match = results[0];
+        const score = (match.score * 100).toFixed(1);
+        console.error(`Similar lesson exists (${score}% match): ${match.lesson.content.substring(0, 80)}`);
+        console.error(`ID: ${match.lesson.id}`);
+        console.error('Use --force to save anyway, or `cmemory forget <id>` to remove the existing one first.');
+        process.exit(1);
+      }
+    }
+
     const lesson = {
       id: crypto.randomUUID(),
       content: text,
@@ -171,14 +188,17 @@ program
       source: 'manual' as const,
     };
 
-    const lessons = loadLessons(projectRoot);
     lessons.push(lesson);
-    saveLessons(projectRoot, lessons);
+    const capped = enforceLessonCap(lessons);
+    saveLessons(projectRoot, capped);
     updateClaudeMd(projectRoot);
 
     console.log(`Added lesson (${lesson.id})`);
     if (tags.length > 0) {
       console.log(`Tags: ${tags.join(', ')}`);
+    }
+    if (capped.length < lessons.length) {
+      console.log(`Cap enforced: evicted ${lessons.length - capped.length} oldest lesson(s).`);
     }
   });
 

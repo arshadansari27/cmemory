@@ -1,15 +1,23 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import * as crypto from 'crypto';
 import { findProjectRoot } from '../utils/paths';
-import { loadLessons, saveLessons, saveProfile } from '../core/storage';
 import { getQueryEmbedding, getDocumentEmbedding } from '../core/embeddings';
-import { searchLessons } from '../core/search';
-import { updateClaudeMd } from '../synthesis/claude-md';
+import {
+  EmbeddingProvider,
+  handleSearchLessons,
+  handleSaveLesson,
+  handleRejectLesson,
+  handleUpdateProfile,
+} from './handlers';
 
 export async function startMcpServer(): Promise<void> {
   const projectRoot = findProjectRoot(process.cwd());
+
+  const realEmbeddings: EmbeddingProvider = {
+    getQueryEmbedding,
+    getDocumentEmbedding,
+  };
 
   const server = new Server(
     { name: 'cmemory', version: '0.1.0' },
@@ -78,7 +86,8 @@ export async function startMcpServer(): Promise<void> {
     ],
   }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  server.setRequestHandler(CallToolRequestSchema, async (request): Promise<any> => {
     const { name, arguments: args } = request.params;
 
     try {
@@ -89,162 +98,10 @@ export async function startMcpServer(): Promise<void> {
         };
       }
 
-      if (name === 'search_lessons') {
-        const query = (args as { query: string }).query;
-        const lessons = loadLessons(projectRoot);
-
-        if (lessons.length === 0) {
-          return {
-            content: [{ type: 'text', text: 'No lessons stored yet.' }],
-          };
-        }
-
-        const embedding = await getQueryEmbedding(query);
-        const results = searchLessons(embedding, lessons, 0.55, 5);
-
-        if (results.length === 0) {
-          return {
-            content: [{ type: 'text', text: `No lessons matched the query: "${query}"` }],
-          };
-        }
-
-        const lines = results.map(r => {
-          const tags = r.lesson.tags.length > 0 ? ` [${r.lesson.tags.join(', ')}]` : '';
-          const score = (r.score * 100).toFixed(1);
-          return `- **${score}%** ${r.lesson.content}${tags}`;
-        });
-
-        return {
-          content: [{ type: 'text', text: `Found ${results.length} lesson(s):\n\n${lines.join('\n')}` }],
-        };
-      }
-
-      if (name === 'save_lesson') {
-        const { content, tags = [], replace_id, force } = args as {
-          content: string;
-          tags?: string[];
-          replace_id?: string;
-          force?: boolean;
-        };
-        const now = new Date().toISOString();
-        const lessons = loadLessons(projectRoot);
-
-        // Replace mode: update existing lesson in place
-        if (replace_id) {
-          const idx = lessons.findIndex(l => l.id === replace_id || l.id.startsWith(replace_id));
-          if (idx === -1) {
-            return {
-              content: [{ type: 'text', text: `No lesson found matching ID: ${replace_id}` }],
-              isError: true,
-            };
-          }
-          const embedding = await getDocumentEmbedding(content);
-          lessons[idx] = {
-            ...lessons[idx],
-            content,
-            tags,
-            embedding,
-            updatedAt: now,
-          };
-          saveLessons(projectRoot, lessons);
-          updateClaudeMd(projectRoot);
-          return {
-            content: [{ type: 'text', text: `Lesson updated (${lessons[idx].id}).` }],
-          };
-        }
-
-        // Dedup check (unless force=true)
-        if (!force) {
-          const embedding = await getDocumentEmbedding(content);
-          const results = searchLessons(embedding, lessons, 0.50, 1);
-          if (results.length > 0) {
-            const match = results[0];
-            const score = (match.score * 100).toFixed(1);
-            return {
-              content: [{
-                type: 'text',
-                text: `Similar lesson exists: ${match.lesson.id} — ${match.lesson.content} (similarity: ${score}%). Call with replace_id to update, or force=true to save as new.`,
-              }],
-            };
-          }
-
-          // No duplicate — save with the embedding we already computed
-          const lesson = {
-            id: crypto.randomUUID(),
-            content,
-            tags,
-            embedding,
-            createdAt: now,
-            updatedAt: now,
-            source: 'manual' as const,
-          };
-          lessons.push(lesson);
-          saveLessons(projectRoot, lessons);
-          updateClaudeMd(projectRoot);
-          return {
-            content: [{ type: 'text', text: `Lesson saved (${lesson.id}).` }],
-          };
-        }
-
-        // Force save — skip dedup
-        const embedding = await getDocumentEmbedding(content);
-        const lesson = {
-          id: crypto.randomUUID(),
-          content,
-          tags,
-          embedding,
-          createdAt: now,
-          updatedAt: now,
-          source: 'manual' as const,
-        };
-        lessons.push(lesson);
-        saveLessons(projectRoot, lessons);
-        updateClaudeMd(projectRoot);
-        return {
-          content: [{ type: 'text', text: `Lesson saved (${lesson.id}).` }],
-        };
-      }
-
-      if (name === 'reject_lesson') {
-        const { lesson_id } = args as { lesson_id: string };
-        const lessons = loadLessons(projectRoot);
-        const matches = lessons.filter(l => l.id.startsWith(lesson_id));
-
-        if (matches.length === 0) {
-          return {
-            content: [{ type: 'text', text: `No lesson found matching ID: ${lesson_id}` }],
-            isError: true,
-          };
-        }
-        if (matches.length > 1) {
-          const list = matches.map(m => `  ${m.id}  ${m.content.substring(0, 60)}`).join('\n');
-          return {
-            content: [{ type: 'text', text: `Ambiguous ID "${lesson_id}" matches ${matches.length} lessons. Be more specific:\n${list}` }],
-            isError: true,
-          };
-        }
-
-        const toRemove = matches[0];
-        const remaining = lessons.filter(l => l.id !== toRemove.id);
-        saveLessons(projectRoot, remaining);
-        updateClaudeMd(projectRoot);
-
-        return {
-          content: [{ type: 'text', text: `Removed lesson: ${toRemove.content}` }],
-        };
-      }
-
-      if (name === 'update_profile') {
-        const { content } = args as { content: string };
-        saveProfile(projectRoot, {
-          content,
-          updatedAt: new Date().toISOString(),
-        });
-        updateClaudeMd(projectRoot);
-        return {
-          content: [{ type: 'text', text: `Profile updated (${content.length} chars). CLAUDE.md refreshed.` }],
-        };
-      }
+      if (name === 'search_lessons') return handleSearchLessons(args as any, projectRoot, realEmbeddings);
+      if (name === 'save_lesson') return handleSaveLesson(args as any, projectRoot, realEmbeddings);
+      if (name === 'reject_lesson') return handleRejectLesson(args as any, projectRoot);
+      if (name === 'update_profile') return handleUpdateProfile(args as any, projectRoot);
 
       return {
         content: [{ type: 'text', text: `Unknown tool: ${name}` }],

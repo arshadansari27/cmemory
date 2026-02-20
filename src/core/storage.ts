@@ -45,6 +45,8 @@ export function saveProfile(projectRoot: string, profile: Profile): void {
 
 // --- Lessons ---
 
+export const MAX_LESSONS = 100;
+
 export function lessonsPath(projectRoot: string): string {
   return path.join(cmemoryDir(projectRoot), 'lessons.json');
 }
@@ -55,6 +57,18 @@ export function loadLessons(projectRoot: string): Lesson[] {
 
 export function saveLessons(projectRoot: string, lessons: Lesson[]): void {
   atomicWriteSync(lessonsPath(projectRoot), JSON.stringify(lessons, null, 2));
+}
+
+/**
+ * Enforce lesson cap by keeping the most recently updated lessons.
+ * Returns the original array if under cap, or a new array trimmed to MAX_LESSONS.
+ */
+export function enforceLessonCap(lessons: Lesson[]): Lesson[] {
+  if (lessons.length <= MAX_LESSONS) return lessons;
+  const sorted = [...lessons].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+  return sorted.slice(0, MAX_LESSONS);
 }
 
 // --- Init / check ---
