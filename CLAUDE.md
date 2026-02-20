@@ -1,24 +1,31 @@
+<!-- cmemory:tools-start -->
+## cmemory Tools (auto-managed by cmemory)
+
+You have these MCP tools for persistent project memory:
+
+- **search_lessons** — Search past lessons by semantic similarity. Use at the start of tasks.
+- **save_lesson** — Save a new lesson. Auto-checks for duplicates; use replace_id to update or force: true to skip.
+- **reject_lesson** — Remove a wrong or stale lesson by ID (prefix match supported).
+- **update_profile** — Replace the project profile (stack, architecture, conventions).
+
+**Workflow:** Search before you work. Save when you learn.
+<!-- cmemory:tools-end -->
+
 <!-- cmemory:profile-start -->
 ## Project Profile (auto-managed by cmemory)
 
-**cmemory** — A TypeScript CLI tool that gives Claude Code persistent memory across sessions via hooks and vector search.
+**cmemory** — A TypeScript CLI tool that gives Claude Code persistent memory across sessions via hooks, MCP tools, and vector search.
 
 **Stack:** TypeScript + Node.js, compiled with `tsc`, tested with vitest. Uses `@huggingface/transformers` (nomic-ai/nomic-embed-text-v1.5, 768-dim) for local embeddings with asymmetric search prefixes (`search_query:` / `search_document:`). Distributed as a global npm package (`npm link`).
 
-**Architecture:** Four Claude Code hooks intercept the session lifecycle — `UserPromptSubmit` searches lessons and injects them via stdout, `PostToolUse` (Read/Bash/Grep) injects tool-relevant lessons, `Stop` queues transcripts with >5 tool calls to `pending.json`, `SessionEnd` spawns `cmemory sync` in the background. A synthesis pipeline runs `claude -p --model sonnet` to extract lessons from queued transcripts and writes them to `lessons.json`.
+**Architecture:** MCP server exposes four tools (search_lessons, save_lesson, reject_lesson, update_profile) as the primary interface. A single `UserPromptSubmit` hook outputs a nudge reminding Claude to use the MCP tools. Hooks registered in `~/.claude/settings.json`, MCP server registered via `claude mcp add`.
 
-**Storage:** Per-project data lives in `.claude/cmemory/` (lessons.json, meta.json, pending.json). Model cache is global at `~/.cmemory/models/`. Hooks are registered in `~/.claude/settings.json`.
+**Storage:** Per-project data lives in `.claude/cmemory/` (lessons.json, profile.json). Model cache is global at `~/.cmemory/models/`. CLAUDE.md has three auto-managed sections: tools, profile, lessons.
 
-**CLI commands:** `init`, `install`, `add`, `status`, `lessons`, `forget`, `sync`, `hook`. 26 tests passing across storage, paths, search, and processor modules.
+**CLI commands:** `init`, `install`, `add`, `status`, `lessons`, `forget`, `profile`, `sync`, `hook`, `mcp`.
 <!-- cmemory:profile-end -->
 
 <!-- cmemory:lessons-start -->
 ## Project Lessons (auto-managed by cmemory)
-- Write path-related tests with `path.join` or platform-neutral assertions rather than hardcoded forward slashes. Windows path tests fail when the code returns backslash-separated paths.
-- When reading stdin with a timeout, rejecting the promise doesn't stop the stream. Use a `settled` boolean flag to prevent double-resolve, and call `process.stdin.destroy()` in the timeout branch to clean up the resource.
-- Allowing spaces in a file-path regex is too greedy — it captures trailing words after the path. For heuristic path extraction, allow hyphens and both slash directions but not spaces.
-- To count occurrences of a type in JSONL transcripts, parse each line as JSON and check `entry.type === 'tool_use'`. Regex-matching the string `"tool_use"` on raw text inflates the count if any tool output contains that literal string.
-- Don't store derived counts (e.g. `lessonCount`) in persistent metadata when they can be computed from the source of truth (`lessons.length`). Stored counts drift when multiple code paths update the array without syncing the counter.
-- On Windows, `spawn('cmemory', ...)` fails because npm creates a `.cmd` wrapper that bare `spawn` can't find. Always pass `shell: true` when spawning npm-linked CLI tools on Windows.
-- Claude Code hooks must output plain text to stdout — not a JSON wrapper like `{ hookSpecificOutput: ... }`. Returning JSON breaks the hook injection mechanism. Only the raw text content should be written to stdout.
+- Claude Code MCP servers must be registered via `claude mcp add`, not by writing to `settings.json` or `~/.claude/settings.json`. The config lives in `~/.claude.json` under `projects.<path>.mcpServers`. Use `claude mcp remove` before `claude mcp add` to avoid duplicates.
 <!-- cmemory:lessons-end -->

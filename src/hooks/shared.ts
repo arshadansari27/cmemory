@@ -1,7 +1,4 @@
-import * as path from 'path';
-import { spawn } from 'child_process';
 import { findProjectRoot } from '../utils/paths';
-import { loadPending } from '../core/storage';
 import { error as logError, debug } from '../utils/logger';
 
 /**
@@ -62,37 +59,4 @@ export async function runHook(fn: () => Promise<void>): Promise<void> {
  */
 export function getProjectRoot(cwd: string): string | null {
   return findProjectRoot(cwd);
-}
-
-/**
- * Spawn `cmemory sync` in the background if there are pending transcripts.
- * Uses node directly (not shell) to avoid visible console windows on Windows.
- */
-export function spawnSynthesisIfNeeded(projectRoot: string): void {
-  const pending = loadPending(projectRoot);
-  if (pending.transcripts.length === 0) {
-    debug('No pending transcripts, skipping synthesis');
-    return;
-  }
-
-  debug(`Spawning background synthesis for ${pending.transcripts.length} transcript(s)`);
-
-  // Resolve the cmemory CLI script path relative to this file:
-  // this file: dist/hooks/shared.js → dist/bin/cmemory.js
-  const cmemoryScript = path.join(__dirname, '..', 'bin', 'cmemory.js');
-
-  // Strip CLAUDECODE env var so `claude -p` doesn't refuse to run
-  const env = { ...process.env };
-  delete env.CLAUDECODE;
-
-  const child = spawn(process.execPath, [cmemoryScript, 'sync', '--project-root', projectRoot], {
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-    cwd: projectRoot,
-    env,
-  });
-
-  child.unref();
-  debug('Background synthesis process spawned');
 }

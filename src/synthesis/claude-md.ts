@@ -4,13 +4,35 @@ import { loadLessons, loadProfile } from '../core/storage';
 import { Lesson, Profile } from '../core/types';
 import { debug } from '../utils/logger';
 
-const LESSON_MARKER_START = '<!-- cmemory:lessons-start -->';
-const LESSON_MARKER_END = '<!-- cmemory:lessons-end -->';
-const LESSON_HEADER = '## Project Lessons (auto-managed by cmemory)';
+const TOOLS_MARKER_START = '<!-- cmemory:tools-start -->';
+const TOOLS_MARKER_END = '<!-- cmemory:tools-end -->';
+const TOOLS_HEADER = '## cmemory Tools (auto-managed by cmemory)';
 
 const PROFILE_MARKER_START = '<!-- cmemory:profile-start -->';
 const PROFILE_MARKER_END = '<!-- cmemory:profile-end -->';
 const PROFILE_HEADER = '## Project Profile (auto-managed by cmemory)';
+
+const LESSON_MARKER_START = '<!-- cmemory:lessons-start -->';
+const LESSON_MARKER_END = '<!-- cmemory:lessons-end -->';
+const LESSON_HEADER = '## Project Lessons (auto-managed by cmemory)';
+
+/**
+ * Build the managed tools section content.
+ */
+function buildToolsSection(): string {
+  const body = [
+    '',
+    'You have these MCP tools for persistent project memory:',
+    '',
+    '- **search_lessons** — Search past lessons by semantic similarity. Use at the start of tasks.',
+    '- **save_lesson** — Save a new lesson. Auto-checks for duplicates; use replace_id to update or force: true to skip.',
+    '- **reject_lesson** — Remove a wrong or stale lesson by ID (prefix match supported).',
+    '- **update_profile** — Replace the project profile (stack, architecture, conventions).',
+    '',
+    '**Workflow:** Search before you work. Save when you learn.',
+  ];
+  return [TOOLS_MARKER_START, TOOLS_HEADER, ...body, TOOLS_MARKER_END].join('\n');
+}
 
 /**
  * Build the managed lesson section content.
@@ -41,9 +63,10 @@ export function buildProfileSection(profile: Profile): string {
 }
 
 /**
- * Replace or insert a managed section in CLAUDE.md content by its markers.
+ * Upsert a managed section in CLAUDE.md content by its markers.
+ * Returns the updated content, or null if the markers were not found.
  */
-function upsertSection(content: string, markerStart: string, markerEnd: string, section: string): string {
+function upsertSection(content: string, markerStart: string, markerEnd: string, section: string): string | null {
   const startIdx = content.indexOf(markerStart);
   const endIdx = content.indexOf(markerEnd);
 
@@ -51,60 +74,78 @@ function upsertSection(content: string, markerStart: string, markerEnd: string, 
     return content.substring(0, startIdx) + section + content.substring(endIdx + markerEnd.length);
   }
 
-  // Not found — append at current insertion point (caller decides order)
-  return null as any; // Signal: not found
+  return null; // Not found
 }
 
 /**
  * Update the managed sections in CLAUDE.md.
  * Creates the file if missing. Preserves all content outside the markers.
- * Profile section appears above lessons section.
+ * Section order: tools (top) → profile → lessons.
  */
 export function updateClaudeMd(projectRoot: string): void {
   const claudeMdPath = path.join(projectRoot, 'CLAUDE.md');
   const lessons = loadLessons(projectRoot);
   const profile = loadProfile(projectRoot);
-  const lessonSection = buildLessonSection(lessons);
+  const toolsSection = buildToolsSection();
   const profileSection = buildProfileSection(profile);
+  const lessonSection = buildLessonSection(lessons);
 
   let content: string;
 
   if (fs.existsSync(claudeMdPath)) {
     content = fs.readFileSync(claudeMdPath, 'utf-8');
 
-    // Update profile section
-    const profileStart = content.indexOf(PROFILE_MARKER_START);
-    const profileEnd = content.indexOf(PROFILE_MARKER_END);
-    if (profileStart !== -1 && profileEnd !== -1) {
-      content = content.substring(0, profileStart) + profileSection + content.substring(profileEnd + PROFILE_MARKER_END.length);
+    // Update each section if its markers exist
+    const sections = [
+      { start: TOOLS_MARKER_START, end: TOOLS_MARKER_END, section: toolsSection },
+      { start: PROFILE_MARKER_START, end: PROFILE_MARKER_END, section: profileSection },
+      { start: LESSON_MARKER_START, end: LESSON_MARKER_END, section: lessonSection },
+    ];
+
+    for (const { start, end, section } of sections) {
+      const updated = upsertSection(content, start, end, section);
+      if (updated !== null) {
+        content = updated;
+      }
     }
 
-    // Update lesson section
-    const lessonStart = content.indexOf(LESSON_MARKER_START);
-    const lessonEnd = content.indexOf(LESSON_MARKER_END);
-    if (lessonStart !== -1 && lessonEnd !== -1) {
-      content = content.substring(0, lessonStart) + lessonSection + content.substring(lessonEnd + LESSON_MARKER_END.length);
-    }
-
-    // If neither section exists yet, insert both at top (profile above lessons)
+    // Insert any missing sections in order: tools → profile → lessons
+    const hasTools = content.indexOf(TOOLS_MARKER_START) !== -1;
     const hasProfile = content.indexOf(PROFILE_MARKER_START) !== -1;
     const hasLessons = content.indexOf(LESSON_MARKER_START) !== -1;
 
-    if (!hasProfile && !hasLessons) {
-      content = profileSection + '\n\n' + lessonSection + '\n\n' + content;
-    } else if (!hasProfile) {
-      // Insert profile before lessons
+    if (!hasTools && !hasProfile && !hasLessons) {
+      // None exist — prepend all three
+      content = toolsSection + '\n\n' + profileSection + '\n\n' + lessonSection + '\n\n' + content;
+    } else if (!hasTools) {
+      // Insert tools before whichever comes first (profile or lessons)
+      const profilePos = content.indexOf(PROFILE_MARKER_START);
+      const lessonPos = content.indexOf(LESSON_MARKER_START);
+      const insertPos = profilePos !== -1 ? profilePos : lessonPos;
+      content = content.substring(0, insertPos) + toolsSection + '\n\n' + content.substring(insertPos);
+    }
+
+    // Re-check after tools insertion
+    const hasProfileNow = content.indexOf(PROFILE_MARKER_START) !== -1;
+    const hasLessonsNow = content.indexOf(LESSON_MARKER_START) !== -1;
+
+    if (!hasProfileNow && !hasLessonsNow) {
+      // Insert both after tools
+      const toolsEndPos = content.indexOf(TOOLS_MARKER_END) + TOOLS_MARKER_END.length;
+      content = content.substring(0, toolsEndPos) + '\n\n' + profileSection + '\n\n' + lessonSection + content.substring(toolsEndPos);
+    } else if (!hasProfileNow) {
+      // Insert profile between tools and lessons
       const lessonPos = content.indexOf(LESSON_MARKER_START);
       content = content.substring(0, lessonPos) + profileSection + '\n\n' + content.substring(lessonPos);
-    } else if (!hasLessons) {
+    } else if (!hasLessonsNow) {
       // Insert lessons after profile
       const profileEndPos = content.indexOf(PROFILE_MARKER_END) + PROFILE_MARKER_END.length;
       content = content.substring(0, profileEndPos) + '\n\n' + lessonSection + content.substring(profileEndPos);
     }
   } else {
-    content = profileSection + '\n\n' + lessonSection + '\n';
+    content = toolsSection + '\n\n' + profileSection + '\n\n' + lessonSection + '\n';
   }
 
   fs.writeFileSync(claudeMdPath, content, 'utf-8');
-  debug(`Updated CLAUDE.md with profile and ${lessons.length} lesson(s)`);
+  debug(`Updated CLAUDE.md with tools, profile, and ${lessons.length} lesson(s)`);
 }

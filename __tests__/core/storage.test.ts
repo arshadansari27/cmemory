@@ -7,11 +7,6 @@ import {
   isCmemoryInitialized,
   loadLessons,
   saveLessons,
-  loadMeta,
-  saveMeta,
-  loadPending,
-  appendPending,
-  clearPending,
 } from '../../src/core/storage';
 import { Lesson } from '../../src/core/types';
 
@@ -31,8 +26,6 @@ describe('initCmemory', () => {
     initCmemory(tmpDir);
     expect(isCmemoryInitialized(tmpDir)).toBe(true);
     expect(loadLessons(tmpDir)).toEqual([]);
-    expect(loadMeta(tmpDir).version).toBe(1);
-    expect(loadPending(tmpDir).transcripts).toEqual([]);
   });
 
   it('does not overwrite existing files', () => {
@@ -76,26 +69,5 @@ describe('lessons', () => {
     // Delete the file
     fs.unlinkSync(path.join(tmpDir, '.claude/cmemory/lessons.json'));
     expect(loadLessons(tmpDir)).toEqual([]);
-  });
-});
-
-describe('pending queue', () => {
-  it('appends transcripts without duplicates', () => {
-    initCmemory(tmpDir);
-    appendPending(tmpDir, '/path/to/transcript1.jsonl');
-    appendPending(tmpDir, '/path/to/transcript2.jsonl');
-    appendPending(tmpDir, '/path/to/transcript1.jsonl'); // duplicate
-    const pending = loadPending(tmpDir);
-    expect(pending.transcripts).toEqual([
-      '/path/to/transcript1.jsonl',
-      '/path/to/transcript2.jsonl',
-    ]);
-  });
-
-  it('clears pending queue', () => {
-    initCmemory(tmpDir);
-    appendPending(tmpDir, '/path/to/transcript.jsonl');
-    clearPending(tmpDir);
-    expect(loadPending(tmpDir).transcripts).toEqual([]);
   });
 });

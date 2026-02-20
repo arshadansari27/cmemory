@@ -48,7 +48,7 @@ describe('searchLessons', () => {
       embedding: [0.0, 0.0, 1.0],
       createdAt: '2025-01-01T00:00:00Z',
       updatedAt: '2025-01-01T00:00:00Z',
-      source: 'synthesis',
+      source: 'manual',
     },
   ];
 

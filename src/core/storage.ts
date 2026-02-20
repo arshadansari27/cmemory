@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Lesson, Meta, PendingQueue, Profile } from './types';
+import { Lesson, Profile } from './types';
 import { cmemoryDir } from '../utils/paths';
 import { debug, warn } from '../utils/logger';
 
@@ -57,45 +57,6 @@ export function saveLessons(projectRoot: string, lessons: Lesson[]): void {
   atomicWriteSync(lessonsPath(projectRoot), JSON.stringify(lessons, null, 2));
 }
 
-// --- Meta ---
-
-export function metaPath(projectRoot: string): string {
-  return path.join(cmemoryDir(projectRoot), 'meta.json');
-}
-
-export function loadMeta(projectRoot: string): Meta {
-  return readJsonSafe<Meta>(metaPath(projectRoot), {
-    version: 1,
-    lastSyncAt: null,
-  });
-}
-
-export function saveMeta(projectRoot: string, meta: Meta): void {
-  atomicWriteSync(metaPath(projectRoot), JSON.stringify(meta, null, 2));
-}
-
-// --- Pending queue ---
-
-export function pendingPath(projectRoot: string): string {
-  return path.join(cmemoryDir(projectRoot), 'pending.json');
-}
-
-export function loadPending(projectRoot: string): PendingQueue {
-  return readJsonSafe<PendingQueue>(pendingPath(projectRoot), { transcripts: [] });
-}
-
-export function appendPending(projectRoot: string, transcriptPath: string): void {
-  const pending = loadPending(projectRoot);
-  if (!pending.transcripts.includes(transcriptPath)) {
-    pending.transcripts.push(transcriptPath);
-  }
-  atomicWriteSync(pendingPath(projectRoot), JSON.stringify(pending, null, 2));
-}
-
-export function clearPending(projectRoot: string): void {
-  atomicWriteSync(pendingPath(projectRoot), JSON.stringify({ transcripts: [] }, null, 2));
-}
-
 // --- Init / check ---
 
 export function isCmemoryInitialized(projectRoot: string): boolean {
@@ -108,18 +69,6 @@ export function initCmemory(projectRoot: string): void {
 
   if (!fs.existsSync(lessonsPath(projectRoot))) {
     atomicWriteSync(lessonsPath(projectRoot), JSON.stringify([], null, 2));
-  }
-
-  const meta: Meta = {
-    version: 1,
-    lastSyncAt: null,
-  };
-  if (!fs.existsSync(metaPath(projectRoot))) {
-    atomicWriteSync(metaPath(projectRoot), JSON.stringify(meta, null, 2));
-  }
-
-  if (!fs.existsSync(pendingPath(projectRoot))) {
-    atomicWriteSync(pendingPath(projectRoot), JSON.stringify({ transcripts: [] }, null, 2));
   }
 
   if (!fs.existsSync(profilePath(projectRoot))) {

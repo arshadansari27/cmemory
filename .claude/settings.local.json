@@ -42,7 +42,14 @@
       "Bash(npm prefix:*)",
       "Bash(cmd.exe //c \"cd C:\\\\Users\\\\me\\\\Projects\\\\cmemory && npm link\")",
       "Bash(cmd.exe //c \"dir C:\\\\Users\\\\me\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\cmemory\\\\dist\\\\bin\\\\\")",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(MSYS=winsymlinks:nativestrict npm link:*)",
+      "Bash(\"/c/Users/me/AppData/Roaming/npm/cmemory\":*)",
+      "Bash(printf '#!/bin/sh\\\\nexec node \"\"C:/Users/me/Projects/cmemory/dist/bin/cmemory.js\"\" \"\"$@\"\"\\\\n')",
+      "Bash(claude mcp:*)",
+      "mcp__cmemory__save_lesson",
+      "mcp__cmemory__update_profile",
+      "mcp__cmemory__search_lessons"
     ]
   }
 }

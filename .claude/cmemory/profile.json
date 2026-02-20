@@ -1,4 +1,4 @@
 {
-  "content": "",
-  "updatedAt": null
+  "content": "**cmemory** — A TypeScript CLI tool that gives Claude Code persistent memory across sessions via hooks, MCP tools, and vector search.\n\n**Stack:** TypeScript + Node.js, compiled with `tsc`, tested with vitest. Uses `@huggingface/transformers` (nomic-ai/nomic-embed-text-v1.5, 768-dim) for local embeddings with asymmetric search prefixes (`search_query:` / `search_document:`). Distributed as a global npm package (`npm link`).\n\n**Architecture:** MCP server exposes four tools (search_lessons, save_lesson, reject_lesson, update_profile) as the primary interface. A single `UserPromptSubmit` hook outputs a nudge reminding Claude to use the MCP tools. Hooks registered in `~/.claude/settings.json`, MCP server registered via `claude mcp add`.\n\n**Storage:** Per-project data lives in `.claude/cmemory/` (lessons.json, profile.json). Model cache is global at `~/.cmemory/models/`. CLAUDE.md has three auto-managed sections: tools, profile, lessons.\n\n**CLI commands:** `init`, `install`, `add`, `status`, `lessons`, `forget`, `profile`, `sync`, `hook`, `mcp`.",
+  "updatedAt": "2026-02-20T02:21:21.490Z"
 }

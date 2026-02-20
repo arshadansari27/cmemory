@@ -5,7 +5,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { initCmemory, isCmemoryInitialized, loadLessons, saveLessons, loadMeta, loadProfile, saveProfile } from '../core/storage';
+import { execSync } from 'child_process';
+import { initCmemory, isCmemoryInitialized, loadLessons, saveLessons, loadProfile, saveProfile } from '../core/storage';
 import { getQueryEmbedding, getDocumentEmbedding, ensureModelDownloaded } from '../core/embeddings';
 import { searchLessons } from '../core/search';
 import { info, error as logError } from '../utils/logger';
@@ -50,7 +51,7 @@ program
     if (fs.existsSync(settingsPath)) {
       try {
         const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-        hooksInstalled = settings.hooks?.Stop?.some((h: any) =>
+        hooksInstalled = settings.hooks?.UserPromptSubmit?.some((h: any) =>
           h.hooks?.some((inner: any) => inner.command?.startsWith('cmemory hook'))
         ) ?? false;
       } catch {
@@ -90,14 +91,6 @@ program
         matcher: '',
         hooks: [{ type: 'command', command: 'cmemory hook on-prompt', timeout: 5 }],
       }],
-      PostToolUse: [{
-        matcher: 'Read|Bash|Grep',
-        hooks: [{ type: 'command', command: 'cmemory hook on-tool-use', timeout: 5 }],
-      }],
-      Stop: [{
-        matcher: '',
-        hooks: [{ type: 'command', command: 'cmemory hook on-stop', timeout: 10 }],
-      }],
     };
 
     // Merge: preserve existing non-cmemory hooks, replace cmemory ones
@@ -110,19 +103,42 @@ program
       settings.hooks[event] = [...filtered, ...hookConfigs];
     }
 
-    // Clean up legacy SessionEnd hook — synthesis now runs from Stop
-    if (settings.hooks.SessionEnd) {
-      settings.hooks.SessionEnd = (settings.hooks.SessionEnd as any[]).filter((h: any) =>
-        !h.hooks?.some((inner: any) => inner.command?.startsWith('cmemory hook'))
-      );
-      if (settings.hooks.SessionEnd.length === 0) {
-        delete settings.hooks.SessionEnd;
+    // Clean up legacy hooks
+    for (const legacyEvent of ['Stop', 'SessionEnd', 'PostToolUse']) {
+      if (settings.hooks[legacyEvent]) {
+        settings.hooks[legacyEvent] = (settings.hooks[legacyEvent] as any[]).filter((h: any) =>
+          !h.hooks?.some((inner: any) => inner.command?.startsWith('cmemory hook'))
+        );
+        if (settings.hooks[legacyEvent].length === 0) {
+          delete settings.hooks[legacyEvent];
+        }
+      }
+    }
+
+    // Clean up stale mcpServers from settings.json (now managed via `claude mcp add`)
+    if (settings.mcpServers?.cmemory) {
+      delete settings.mcpServers.cmemory;
+      if (Object.keys(settings.mcpServers).length === 0) {
+        delete settings.mcpServers;
       }
     }
 
     fs.mkdirSync(settingsDir, { recursive: true });
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     console.log(`Hooks installed in ${settingsPath}`);
+
+    // Register MCP server via `claude mcp add` (writes to ~/.claude.json project config)
+    const mcpScript = path.join(__dirname, '..', 'bin', 'cmemory.js');
+    try {
+      // Remove first to avoid "already exists" errors
+      try { execSync('claude mcp remove cmemory', { stdio: 'ignore' }); } catch { /* ignore */ }
+      execSync(`claude mcp add cmemory -- node "${mcpScript}" mcp`, { stdio: 'inherit' });
+      console.log('MCP server registered (search_lessons, save_lesson, reject_lesson, update_profile).');
+    } catch (err) {
+      console.error('Warning: Could not register MCP server via `claude mcp add`.');
+      console.error('Make sure Claude Code CLI (`claude`) is installed and on your PATH.');
+      console.error(`You can register manually: claude mcp add cmemory -- node "${mcpScript}" mcp`);
+    }
     console.log('cmemory will now inject lessons during Claude Code sessions.');
   });
 
@@ -180,7 +196,6 @@ program
     }
 
     const lessons = loadLessons(projectRoot);
-    const meta = loadMeta(projectRoot);
     const profile = loadProfile(projectRoot);
 
     console.log(`Project root: ${projectRoot}`);
@@ -190,7 +205,6 @@ program
     } else {
       console.log('Profile: (empty)');
     }
-    console.log(`Last sync: ${meta.lastSyncAt || 'never'}`);
 
     // Check hook health
     const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
@@ -351,59 +365,26 @@ profileCmd
     console.log('Profile cleared. CLAUDE.md updated.');
   });
 
-// --- cmemory sync ---
+// --- cmemory mcp ---
 program
-  .command('sync')
-  .description('Run lesson synthesis on pending transcripts')
-  .option('--project-root <path>', 'Project root path (used by background process)')
-  .action(async (opts: { projectRoot?: string }) => {
-    const projectRoot = opts.projectRoot || findProjectRoot(process.cwd());
-    if (!projectRoot) {
-      console.error('No cmemory project found.');
-      process.exit(1);
-    }
-
-    const { runSynthesis } = await import('../synthesis/synthesizer');
-    const { processSynthesisResponse } = await import('../synthesis/processor');
-
-    console.log('Running synthesis...');
-    const response = runSynthesis(projectRoot);
-    if (!response) {
-      console.log('No synthesis results (no pending transcripts or synthesis failed).');
-      return;
-    }
-
-    console.log(`Processing ${response.actions.length} action(s)...`);
-    await processSynthesisResponse(projectRoot, response);
-    console.log('Synthesis complete.');
+  .command('mcp')
+  .description('Start MCP server (used by Claude Code)')
+  .action(async () => {
+    const { startMcpServer } = await import('../mcp/server');
+    await startMcpServer();
   });
 
 // --- cmemory hook <name> --- (hidden, used by Claude Code hooks)
 const hookCmd = program
   .command('hook')
   .description('Run a hook handler (used internally by Claude Code)')
-  .argument('<name>', 'Hook name: on-prompt, on-tool-use, on-stop, on-session-end');
+  .argument('<name>', 'Hook name: on-prompt');
 
 hookCmd.action(async (name: string) => {
   switch (name) {
     case 'on-prompt': {
       const { onPrompt } = await import('../hooks/on-prompt');
       await onPrompt();
-      break;
-    }
-    case 'on-tool-use': {
-      const { onToolUse } = await import('../hooks/on-tool-use');
-      await onToolUse();
-      break;
-    }
-    case 'on-stop': {
-      const { onStop } = await import('../hooks/on-stop');
-      await onStop();
-      break;
-    }
-    case 'on-session-end': {
-      const { onSessionEnd } = await import('../hooks/on-session-end');
-      await onSessionEnd();
       break;
     }
     default:
