@@ -1,0 +1,27 @@
+{
+  "name": "cmemory",
+  "version": "0.1.0",
+  "description": "Lesson memory system for Claude Code CLI",
+  "main": "dist/bin/cmemory.js",
+  "bin": {
+    "cmemory": "dist/bin/cmemory.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.4.1",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(fi:*)",
+      "Bash(done)",
+      "Bash(find:*)",
+      "Bash(claude mcp list:*)",
+      "Bash(echo:*)",
+      "Bash(node --version:*)",
+      "Bash(npm --version:*)",
+      "Bash(npm root:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.claude.com)",
+      "Bash(claude -p:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc)",
+      "Bash(npx vitest run)",
+      "Bash(node:*)",
+      "Bash(npm link:*)",
+      "Bash(cmemory --version:*)",
+      "Bash(cmemory init:*)",
+      "Bash(cmemory install:*)",
+      "Bash(cmemory status:*)",
+      "Bash(npx vitest run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(cmemory sync:*)",
+      "Bash(CLAUDECODE= cmemory sync)",
+      "Bash(unset:*)",
+      "Bash(env -u CLAUDECODE cmemory sync:*)",
+      "Bash(CMEMORY_DEBUG=1 node dist/bin/cmemory.js:*)",
+      "Bash(cmemory help:*)",
+      "Bash(cmemory profile:*)",
+      "Bash(cat:*)",
+      "Bash(cmd //c \"dir C:\\\\Users\\\\me\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\ /AL\")",
+      "Bash(cmd //c:*)",
+      "Bash(powershell -Command:*)"
+    ]
+  }
+}
