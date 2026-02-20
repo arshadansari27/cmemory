@@ -60,7 +60,8 @@
       "Bash(\"/c/Users/me/AppData/Roaming/npm/cmemory.cmd\":*)",
       "Bash(powershell.exe -Command \"cmemory --version\")",
       "Bash(powershell.exe -Command \"cmemory init\")",
-      "Bash(npm run test:mcp:*)"
+      "Bash(npm run test:mcp:*)",
+      "Bash(npm config:*)"
     ]
   }
 }
