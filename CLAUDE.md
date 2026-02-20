@@ -27,5 +27,6 @@ You have these MCP tools for persistent project memory:
 
 <!-- cmemory:lessons-start -->
 ## Project Lessons (auto-managed by cmemory)
+- On Windows 11, `npm link` creates symlinks/junctions that get blocked as "untrusted mount points." Instead of fighting symlinks, write a direct `.cmd` shim (`node "C:\absolute\path\dist\bin\cmemory.js" %*`) and a matching bash shim in the npm global bin directory.
 - Claude Code MCP servers must be registered via `claude mcp add`, not by writing to `settings.json` or `~/.claude/settings.json`. The config lives in `~/.claude.json` under `projects.<path>.mcpServers`. Use `claude mcp remove` before `claude mcp add` to avoid duplicates.
 <!-- cmemory:lessons-end -->
