@@ -15,13 +15,15 @@ export interface McpResult {
 }
 
 /**
- * Returns a higher similarity threshold for small stores where lack of
- * competition causes most queries to match above the default 0.55.
+ * Returns an adaptive similarity threshold based on store size.
+ * Empirical testing with nomic-embed-text-v1.5 shows relevant queries
+ * score 0.63+ while irrelevant ones score 0.54 and below, so we keep
+ * thresholds in the 0.50–0.55 range to avoid filtering valid matches.
  */
 export function getAdaptiveThreshold(lessonCount: number): number {
-  if (lessonCount < 5) return 0.65;
-  if (lessonCount < 15) return 0.60;
-  return 0.55;
+  if (lessonCount < 5) return 0.55;
+  if (lessonCount < 15) return 0.52;
+  return 0.50;
 }
 
 export async function handleSearchLessons(

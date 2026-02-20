@@ -237,33 +237,33 @@ describe('handleUpdateProfile', () => {
 });
 
 describe('getAdaptiveThreshold', () => {
-  it('returns 0.65 for 0 lessons', () => {
-    expect(getAdaptiveThreshold(0)).toBe(0.65);
+  it('returns 0.55 for 0 lessons', () => {
+    expect(getAdaptiveThreshold(0)).toBe(0.55);
   });
 
-  it('returns 0.65 for 4 lessons', () => {
-    expect(getAdaptiveThreshold(4)).toBe(0.65);
+  it('returns 0.55 for 4 lessons', () => {
+    expect(getAdaptiveThreshold(4)).toBe(0.55);
   });
 
-  it('returns 0.60 for 5 lessons', () => {
-    expect(getAdaptiveThreshold(5)).toBe(0.60);
+  it('returns 0.52 for 5 lessons', () => {
+    expect(getAdaptiveThreshold(5)).toBe(0.52);
   });
 
-  it('returns 0.60 for 14 lessons', () => {
-    expect(getAdaptiveThreshold(14)).toBe(0.60);
+  it('returns 0.52 for 14 lessons', () => {
+    expect(getAdaptiveThreshold(14)).toBe(0.52);
   });
 
-  it('returns 0.55 for 15 lessons', () => {
-    expect(getAdaptiveThreshold(15)).toBe(0.55);
+  it('returns 0.50 for 15 lessons', () => {
+    expect(getAdaptiveThreshold(15)).toBe(0.50);
   });
 
-  it('returns 0.55 for 100 lessons', () => {
-    expect(getAdaptiveThreshold(100)).toBe(0.55);
+  it('returns 0.50 for 100 lessons', () => {
+    expect(getAdaptiveThreshold(100)).toBe(0.50);
   });
 
-  it('small store rejects marginal matches that pass the default threshold', async () => {
+  it('small store accepts matches above 0.55 threshold', async () => {
     // Create a lesson with a hand-crafted embedding so that
-    // cosine_sim(query, doc) = 0.60 — above the old 0.55 but below 0.65.
+    // cosine_sim(query, doc) = 0.60 — above the 0.55 small-store threshold.
     // query = [1, 0, 0, ...], doc = [0.6, 0.8, 0, ...]
     // dot = 0.6, |q|=1, |d|=1 → similarity = 0.60
     const EMBEDDING_DIM = 768;
@@ -289,7 +289,38 @@ describe('getAdaptiveThreshold', () => {
     };
 
     const result = await handleSearchLessons({ query: 'anything' }, project.root, embeddings);
-    // 1 lesson → adaptive threshold 0.65 → 0.60 < 0.65 → no match
+    // 1 lesson → adaptive threshold 0.55 → 0.60 >= 0.55 → match
+    expect(result.content[0].text).toContain('Found 1 lesson(s)');
+    expect(result.content[0].text).toContain('Marginal lesson');
+  });
+
+  it('small store rejects matches below 0.55 threshold', async () => {
+    // cosine_sim(query, doc) = 0.50 — below the 0.55 small-store threshold.
+    // query = [1, 0, 0, ...], doc = [0.5, 0.866, 0, ...]
+    // dot = 0.5, |q|=1, |d|=1 → similarity = 0.50
+    const EMBEDDING_DIM = 768;
+    const docVec = new Array(EMBEDDING_DIM).fill(0);
+    docVec[0] = 0.5;
+    docVec[1] = 0.866;
+
+    const lesson = {
+      id: 'test-below',
+      content: 'Below threshold lesson',
+      tags: [],
+      embedding: docVec,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      source: 'manual' as const,
+    };
+    saveLessons(project.root, [lesson]);
+
+    const embeddings: EmbeddingProvider = {
+      getQueryEmbedding: async () => fakeEmbedding(0),
+      getDocumentEmbedding: async () => docVec,
+    };
+
+    const result = await handleSearchLessons({ query: 'anything' }, project.root, embeddings);
+    // 1 lesson → adaptive threshold 0.55 → 0.50 < 0.55 → no match
     expect(result.content[0].text).toMatch(/No lessons matched/);
   });
 });

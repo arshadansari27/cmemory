@@ -65,17 +65,15 @@ The model is downloaded once on `cmemory init` and cached globally at `~/.cmemor
 
 ### The Adaptive Threshold
 
-Not all lesson stores are equal. When you have 3 lessons, nearly every query will match something above a low threshold — cosine similarity doesn't have much to discriminate against. When you have 50 lessons, a 0.55 threshold actually means something.
-
-So the threshold scales with the number of stored lessons:
+The similarity threshold scales with the number of stored lessons:
 
 | Lessons | Threshold |
 |---------|-----------|
-| < 5     | 0.65      |
-| 5–14    | 0.60      |
-| 15+     | 0.55      |
+| < 5     | 0.55      |
+| 5–14    | 0.52      |
+| 15+     | 0.50      |
 
-This means cmemory is selective from day one. You won't get garbage results early on just because there's nothing better to return.
+Empirical testing with nomic-embed-text-v1.5 shows relevant queries score 0.63+ while irrelevant ones score 0.54 and below. The thresholds sit just below this natural gap — permissive enough to catch real matches, strict enough to filter noise.
 
 ### The LRU Cap
 
