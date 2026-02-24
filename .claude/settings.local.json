@@ -61,7 +61,10 @@
       "Bash(powershell.exe -Command \"cmemory --version\")",
       "Bash(powershell.exe -Command \"cmemory init\")",
       "Bash(npm run test:mcp:*)",
-      "Bash(npm config:*)"
+      "Bash(npm config:*)",
+      "Bash(where:*)",
+      "Bash(magick --version 2>/dev/null || python3 --version 2>/dev/null || python --version 2>/dev/null)",
+      "Bash(python:*)"
     ]
   }
 }

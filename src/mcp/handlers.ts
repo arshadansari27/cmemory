@@ -53,7 +53,8 @@ export async function handleSearchLessons(
   const lines = results.map(r => {
     const tags = r.lesson.tags.length > 0 ? ` [${r.lesson.tags.join(', ')}]` : '';
     const score = (r.score * 100).toFixed(1);
-    return `- **${score}%** ${r.lesson.content}${tags}`;
+    const shortId = r.lesson.id.substring(0, 8);
+    return `- **${score}%** [${shortId}] ${r.lesson.content}${tags}`;
   });
 
   return {
@@ -72,10 +73,14 @@ export async function handleSaveLesson(
 
   // Replace mode: update existing lesson in place
   if (replace_id) {
-    const idx = lessons.findIndex(l => l.id === replace_id || l.id.startsWith(replace_id));
+    let idx = lessons.findIndex(l => l.id === replace_id || l.id.startsWith(replace_id));
+    // Fallback: if no ID match, try matching by content substring
+    if (idx === -1) {
+      idx = lessons.findIndex(l => l.content.includes(replace_id));
+    }
     if (idx === -1) {
       return {
-        content: [{ type: 'text', text: `No lesson found matching ID: ${replace_id}` }],
+        content: [{ type: 'text', text: `No lesson found matching ID or content: ${replace_id}` }],
         isError: true,
       };
     }
@@ -154,11 +159,16 @@ export async function handleRejectLesson(
 ): Promise<McpResult> {
   const { lesson_id } = args;
   const lessons = loadLessons(projectRoot);
-  const matches = lessons.filter(l => l.id.startsWith(lesson_id));
+  let matches = lessons.filter(l => l.id.startsWith(lesson_id));
+
+  // Fallback: if no ID match, try matching by content substring
+  if (matches.length === 0) {
+    matches = lessons.filter(l => l.content.includes(lesson_id));
+  }
 
   if (matches.length === 0) {
     return {
-      content: [{ type: 'text', text: `No lesson found matching ID: ${lesson_id}` }],
+      content: [{ type: 'text', text: `No lesson found matching ID or content: ${lesson_id}` }],
       isError: true,
     };
   }
