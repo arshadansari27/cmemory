@@ -63,7 +63,7 @@ describe('updateClaudeMd', () => {
     expect(md).toContain('<!-- cmemory:profile-start -->');
   });
 
-  it('top 10 lessons sorted by updatedAt desc', () => {
+  it('top 5 lessons sorted by updatedAt desc', () => {
     const lessons: Lesson[] = [];
     for (let i = 0; i < 12; i++) {
       const month = String(i + 1).padStart(2, '0');
@@ -75,14 +75,25 @@ describe('updateClaudeMd', () => {
 
     const md = fs.readFileSync(project.claudeMdPath, 'utf-8');
 
-    // Lessons 2-11 (months 3-12) should appear (top 10 by updatedAt desc)
-    for (let i = 2; i < 12; i++) {
+    // Lessons 7-11 (months 8-12) should appear (top 5 by updatedAt desc)
+    for (let i = 7; i < 12; i++) {
       expect(md).toContain(`Lesson number ${i}`);
     }
-    // Lessons 0 and 1 (months 1-2) should NOT appear — they're the oldest
+    // Older lessons should NOT appear
     // Use \n anchoring to avoid matching "Lesson number 10" / "Lesson number 11"
-    expect(md).not.toMatch(/- Lesson number 0\n/);
-    expect(md).not.toMatch(/- Lesson number 1\n/);
+    for (let i = 0; i < 7; i++) {
+      expect(md).not.toMatch(new RegExp(`- Lesson number ${i}\\n`));
+    }
+  });
+
+  it('long lesson content is truncated with a search_lessons pointer', () => {
+    saveLessons(project.root, [makeLesson('l1', 'x'.repeat(400), '2025-01-01T00:00:00Z')]);
+
+    updateClaudeMd(project.root);
+
+    const md = fs.readFileSync(project.claudeMdPath, 'utf-8');
+    expect(md).toContain('x'.repeat(300) + '… (truncated — search_lessons for full text)');
+    expect(md).not.toContain('x'.repeat(301));
   });
 
   it('empty lessons → markers only (no header)', () => {

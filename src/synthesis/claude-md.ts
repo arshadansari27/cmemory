@@ -38,17 +38,27 @@ function buildToolsSection(): string {
 /**
  * Build the managed lesson section content.
  */
+// Keep the always-in-context lesson section small: full lesson text is
+// retrievable on demand via search_lessons.
+export const CLAUDE_MD_LESSON_COUNT = 5;
+export const CLAUDE_MD_LESSON_CHARS = 300;
+
 function buildLessonSection(lessons: Lesson[]): string {
-  // Sort by updatedAt descending, take top 10
+  // Sort by updatedAt descending, take the most recent few
   const top = [...lessons]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 10);
+    .slice(0, CLAUDE_MD_LESSON_COUNT);
 
   if (top.length === 0) {
     return `${LESSON_MARKER_START}\n${LESSON_MARKER_END}`;
   }
 
-  const lines = top.map(l => `- ${l.content}`);
+  const lines = top.map(l => {
+    const text = l.content.length > CLAUDE_MD_LESSON_CHARS
+      ? `${l.content.slice(0, CLAUDE_MD_LESSON_CHARS)}… (truncated — search_lessons for full text)`
+      : l.content;
+    return `- ${text}`;
+  });
   return [LESSON_MARKER_START, LESSON_HEADER, ...lines, LESSON_MARKER_END].join('\n');
 }
 

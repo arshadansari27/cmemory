@@ -45,6 +45,15 @@ describe('handleSaveLesson', () => {
     expect(lessons[0].embedding).toEqual(fakeEmbedding(1));
   });
 
+  it('rejects content over 500 chars without saving', async () => {
+    const embeddings = makeFakeEmbeddingProvider(0, 1);
+    const result = await handleSaveLesson({ content: 'x'.repeat(501) }, project.root, embeddings);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/Lesson too long/);
+    expect(loadLessons(project.root)).toHaveLength(0);
+  });
+
   it('dedup: same embedding returns "Similar lesson exists"', async () => {
     // Both query and doc at index 5 → cosine similarity 1.0
     const embeddings = makeFakeEmbeddingProvider(5, 5);
