@@ -43,7 +43,7 @@ export async function startMcpServer(): Promise<void> {
         inputSchema: {
           type: 'object' as const,
           properties: {
-            content: { type: 'string', description: 'The lesson content to save' },
+            content: { type: 'string', description: 'The lesson content to save: 1-3 sentences, max 500 chars (longer is rejected)' },
             tags: {
               type: 'array',
               items: { type: 'string' },

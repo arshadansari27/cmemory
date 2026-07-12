@@ -62,12 +62,27 @@ export async function handleSearchLessons(
   };
 }
 
+// Lessons are meant to be 1-3 sentences; long ones bloat CLAUDE.md and every
+// session's context. Reject rather than truncate so the caller rewrites it.
+export const MAX_LESSON_CONTENT_CHARS = 500;
+
 export async function handleSaveLesson(
   args: { content: string; tags?: string[]; replace_id?: string; force?: boolean },
   projectRoot: string,
   embeddings: EmbeddingProvider,
 ): Promise<McpResult> {
   const { content, tags = [], replace_id, force } = args;
+
+  if (content.length > MAX_LESSON_CONTENT_CHARS) {
+    return {
+      content: [{
+        type: 'text',
+        text: `Lesson too long (${content.length} chars, max ${MAX_LESSON_CONTENT_CHARS}). Rewrite it as 1-3 sentences: root cause, gotcha, or pattern — not a session recap.`,
+      }],
+      isError: true,
+    };
+  }
+
   const now = new Date().toISOString();
   const lessons = loadLessons(projectRoot);
 
