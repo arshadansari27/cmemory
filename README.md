@@ -63,6 +63,21 @@ The model produces 768-dimensional vectors. It uses asymmetric search prefixes â
 
 The model is downloaded once on `cmemory init` and cached globally at `~/.cmemory/models/`. After that, it loads from disk with remote model checks disabled.
 
+### Memory Footprint
+
+Claude Code starts one cmemory MCP server **per session**, so the model's footprint is paid once per open session, not once per machine. Two things keep that affordable:
+
+- The model loads with `dtype: 'q8'` (~140MB of weights instead of 522MB for fp32). Measured on one embedding call: **390MB RSS instead of 1109MB**. Retrieval separation is unaffected â€” the worst matching pair scores 0.4982 against a best non-match of 0.4533.
+- The pipeline is released after 5 minutes with no embedding call, and reloaded on demand (a few seconds). Override with `CMEMORY_MODEL_IDLE_MS`; `0` disables it.
+
+The release only returns memory to the OS if glibc is told to trim, which it does not do by default at these allocation sizes. If you run several concurrent sessions, launch the MCP server with:
+
+```json
+{ "env": { "MALLOC_TRIM_THRESHOLD_": "131072", "MALLOC_ARENA_MAX": "2" } }
+```
+
+With those set, an idle server falls to **120MB**; without them it settles around 260MB.
+
 ### The Adaptive Threshold
 
 The similarity threshold scales with the number of stored lessons:
