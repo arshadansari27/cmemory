@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { loadLessons, saveLessons, saveProfile, enforceLessonCap } from '../core/storage';
 import { searchLessons } from '../core/search';
-import { updateClaudeMd } from '../synthesis/claude-md';
+import { updateClaudeMd, isHomeRoot } from '../synthesis/claude-md';
 
 export interface EmbeddingProvider {
   getQueryEmbedding(text: string): Promise<number[]>;
@@ -215,7 +215,10 @@ export async function handleUpdateProfile(
     updatedAt: new Date().toISOString(),
   });
   updateClaudeMd(projectRoot);
+  const note = isHomeRoot(projectRoot)
+    ? ' Not written to ~/CLAUDE.md: this repo has no cmemory store of its own, so it uses the shared one in ~. Run `cmemory init` in the repo to give it its own profile.'
+    : ' CLAUDE.md refreshed.';
   return {
-    content: [{ type: 'text', text: `Profile updated (${content.length} chars). CLAUDE.md refreshed.` }],
+    content: [{ type: 'text', text: `Profile updated (${content.length} chars).${note}` }],
   };
 }
