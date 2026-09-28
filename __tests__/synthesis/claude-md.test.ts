@@ -130,3 +130,30 @@ describe('updateClaudeMd', () => {
     expect(second).toBe(first);
   });
 });
+
+describe('updateClaudeMd at the home root', () => {
+  it('writes tools but leaves profile and lessons out when the root is the home dir', () => {
+    saveLessons(project.root, [makeLesson('l1', 'Repo-specific lesson', '2025-01-01T00:00:00Z')]);
+    saveProfile(project.root, { content: 'Some other repo profile', updatedAt: '2025-01-01T00:00:00Z' });
+
+    updateClaudeMd(project.root, project.root);
+
+    const md = fs.readFileSync(project.claudeMdPath, 'utf-8');
+    expect(md).toContain('## cmemory — Persistent Project Memory');
+    expect(md).not.toContain('Repo-specific lesson');
+    expect(md).not.toContain('Some other repo profile');
+    expect(md).toContain('<!-- cmemory:profile-start -->\n<!-- cmemory:profile-end -->');
+    expect(md).toContain('<!-- cmemory:lessons-start -->\n<!-- cmemory:lessons-end -->');
+    expect(md).toContain('Some user content here.');
+    // The store itself is untouched and still searchable.
+    expect(loadLessons(project.root)).toHaveLength(1);
+  });
+
+  it('still writes profile and lessons for a normal project root', () => {
+    saveProfile(project.root, { content: 'Real project profile', updatedAt: '2025-01-01T00:00:00Z' });
+
+    updateClaudeMd(project.root, '/some/other/home');
+
+    expect(fs.readFileSync(project.claudeMdPath, 'utf-8')).toContain('Real project profile');
+  });
+});

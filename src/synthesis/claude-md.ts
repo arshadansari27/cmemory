@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { loadLessons, loadProfile } from '../core/storage';
 import { Lesson, Profile } from '../core/types';
@@ -89,14 +90,27 @@ function upsertSection(content: string, markerStart: string, markerEnd: string, 
 }
 
 /**
+ * True when the project root is the home directory. Repos without their own
+ * .claude/cmemory resolve up to ~ (because ~/.claude/cmemory exists), so ~ acts
+ * as a shared fallback store. ~/CLAUDE.md loads in every session under ~, so
+ * a single repo's profile and lessons must not be written there.
+ */
+export function isHomeRoot(projectRoot: string, homeDir: string = os.homedir()): boolean {
+  return path.resolve(projectRoot) === path.resolve(homeDir);
+}
+
+/**
  * Update the managed sections in CLAUDE.md.
  * Creates the file if missing. Preserves all content outside the markers.
  * Section order: tools (top) → profile → lessons.
+ * At the home root only the tools section is filled; profile and lessons stay
+ * searchable via search_lessons but are left out of ~/CLAUDE.md.
  */
-export function updateClaudeMd(projectRoot: string): void {
+export function updateClaudeMd(projectRoot: string, homeDir: string = os.homedir()): void {
   const claudeMdPath = path.join(projectRoot, 'CLAUDE.md');
-  const lessons = loadLessons(projectRoot);
-  const profile = loadProfile(projectRoot);
+  const atHome = isHomeRoot(projectRoot, homeDir);
+  const lessons = atHome ? [] : loadLessons(projectRoot);
+  const profile = atHome ? { content: '', updatedAt: '' } : loadProfile(projectRoot);
   const toolsSection = buildToolsSection();
   const profileSection = buildProfileSection(profile);
   const lessonSection = buildLessonSection(lessons);
